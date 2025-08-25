@@ -290,6 +290,12 @@ func (s *Scheduler) getNodesUsage(nodes *[]string, task *corev1.Pod) (*map[strin
 				},
 			})
 		}
+
+		// Update real-time device usage if enabled
+		if s.shouldUseRealTimeCheck(task) {
+			s.updateRealTimeDeviceUsage(nodeInfo, node.ID)
+		}
+
 		overallnodeMap[node.ID] = nodeInfo
 	}
 
@@ -520,4 +526,49 @@ func genSuccessMsg(totalNodes int, target string, nodes []*policy.NodeScore) str
 	}
 	score := strings.Join(scores, ",")
 	return fmt.Sprintf(successMsg, target, totalNodes-len(nodes), len(nodes), score)
+}
+
+// shouldUseRealTimeCheck determines if real-time GPU status check should be used for the given pod
+func (s *Scheduler) shouldUseRealTimeCheck(pod *corev1.Pod) bool {
+	// Check pod annotation first
+	if pod != nil && pod.Annotations != nil {
+		if value, ok := pod.Annotations[util.RealTimeCheckAnnotationKey]; ok {
+			return value == "true"
+		}
+	}
+
+	// Check global configuration
+	return config.EnableRealTimeCheck
+}
+
+// updateRealTimeDeviceUsage updates the real-time device usage information for a node
+func (s *Scheduler) updateRealTimeDeviceUsage(nodeUsage *NodeUsage, nodeID string) {
+	for _, deviceList := range nodeUsage.Devices.DeviceLists {
+		for deviceType, deviceInstance := range device.GetDevices() {
+			if strings.Contains(deviceList.Device.Type, deviceType) && deviceInstance.IsRealTimeCheckEnabled() {
+				realTimeUsage, err := deviceInstance.GetRealTimeDeviceUsage(deviceList.Device.ID)
+				if err != nil {
+					klog.V(4).InfoS("Failed to get real-time usage, using cached data",
+						"nodeID", nodeID,
+						"deviceID", deviceList.Device.ID,
+						"deviceType", deviceType,
+						"error", err)
+					continue
+				}
+
+				// Update real-time usage information
+				deviceList.Device.RealTimeUsedmem = int32(realTimeUsage.UsedMemory / (1024 * 1024)) // Convert to MB
+				deviceList.Device.RealTimeUtilization = realTimeUsage.Utilization
+				deviceList.Device.LastRealTimeUpdate = realTimeUsage.Timestamp
+
+				klog.V(5).InfoS("Updated real-time device usage",
+					"nodeID", nodeID,
+					"deviceID", deviceList.Device.ID,
+					"cachedUsedMemMB", deviceList.Device.Usedmem,
+					"realTimeUsedMemMB", deviceList.Device.RealTimeUsedmem,
+					"utilization", realTimeUsage.Utilization,
+					"processCount", realTimeUsage.ProcessCount)
+			}
+		}
+	}
 }
