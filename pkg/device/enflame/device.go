@@ -345,3 +345,15 @@ func (enf *EnflameDevices) Fit(devices []*util.DeviceUsage, request util.Contain
 	}
 	return false, tmpDevs, common.GenReason(reason, len(devices))
 }
+
+// GetRealTimeDeviceUsage implements the Devices interface for Enflame GCU devices
+// Currently returns an error as real-time checking is not implemented for Enflame GCU devices
+func (dev *EnflameDevices) GetRealTimeDeviceUsage(deviceID string) (*util.RealTimeDeviceUsage, error) {
+	return nil, fmt.Errorf("real-time device usage checking is not implemented for Enflame GCU devices")
+}
+
+// IsRealTimeCheckEnabled implements the Devices interface for Enflame GCU devices
+// Currently returns false as real-time checking is not implemented for Enflame GCU devices
+func (dev *EnflameDevices) IsRealTimeCheckEnabled() bool {
+	return false
+}
