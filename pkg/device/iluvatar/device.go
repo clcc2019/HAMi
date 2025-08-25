@@ -332,3 +332,15 @@ func (ilu *IluvatarDevices) Fit(devices []*util.DeviceUsage, request util.Contai
 	}
 	return false, tmpDevs, common.GenReason(reason, len(devices))
 }
+
+// GetRealTimeDeviceUsage implements the Devices interface for Iluvatar GPU devices
+// Currently returns an error as real-time checking is not implemented for Iluvatar GPU devices
+func (dev *IluvatarDevices) GetRealTimeDeviceUsage(deviceID string) (*util.RealTimeDeviceUsage, error) {
+	return nil, fmt.Errorf("real-time device usage checking is not implemented for Iluvatar GPU devices")
+}
+
+// IsRealTimeCheckEnabled implements the Devices interface for Iluvatar GPU devices
+// Currently returns false as real-time checking is not implemented for Iluvatar GPU devices
+func (dev *IluvatarDevices) IsRealTimeCheckEnabled() bool {
+	return false
+}

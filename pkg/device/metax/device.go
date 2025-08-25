@@ -316,3 +316,15 @@ func (mat *MetaxDevices) Fit(devices []*util.DeviceUsage, request util.Container
 	}
 	return false, tmpDevs, common.GenReason(reason, len(devices))
 }
+
+// GetRealTimeDeviceUsage implements the Devices interface for Metax GPU devices
+// Currently returns an error as real-time checking is not implemented for Metax GPU devices
+func (dev *MetaxDevices) GetRealTimeDeviceUsage(deviceID string) (*util.RealTimeDeviceUsage, error) {
+	return nil, fmt.Errorf("real-time device usage checking is not implemented for Metax GPU devices")
+}
+
+// IsRealTimeCheckEnabled implements the Devices interface for Metax GPU devices
+// Currently returns false as real-time checking is not implemented for Metax GPU devices
+func (dev *MetaxDevices) IsRealTimeCheckEnabled() bool {
+	return false
+}

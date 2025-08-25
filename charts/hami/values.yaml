@@ -75,6 +75,15 @@ scheduler:
   leaderElect: true
   # when leaderElect is true, replicas is available, otherwise replicas is 1.
   replicas: 1
+  # Real-time GPU status check configuration
+  realTimeCheck:
+    # Enable real-time GPU status checking during scheduling
+    enabled: false
+    # Real-time check mode: strict, warning, disabled
+    # strict: Reject scheduling if real-time check fails
+    # warning: Log warnings but allow scheduling to proceed
+    # disabled: Skip real-time memory validation
+    mode: "strict"
   kubeScheduler:
     # @param enabled indicate whether to run kube-scheduler container in the scheduler pod, it's true by default.
     enabled: true

@@ -421,3 +421,15 @@ func (cam *CambriconDevices) Fit(devices []*util.DeviceUsage, request util.Conta
 	}
 	return false, tmpDevs, common.GenReason(reason, len(devices))
 }
+
+// GetRealTimeDeviceUsage implements the Devices interface for Cambricon MLU devices
+// Currently returns an error as real-time checking is not implemented for MLU devices
+func (dev *CambriconDevices) GetRealTimeDeviceUsage(deviceID string) (*util.RealTimeDeviceUsage, error) {
+	return nil, fmt.Errorf("real-time device usage checking is not implemented for Cambricon MLU devices")
+}
+
+// IsRealTimeCheckEnabled implements the Devices interface for Cambricon MLU devices
+// Currently returns false as real-time checking is not implemented for MLU devices
+func (dev *CambriconDevices) IsRealTimeCheckEnabled() bool {
+	return false
+}

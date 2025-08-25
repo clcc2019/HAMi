@@ -475,3 +475,15 @@ func (kl *KunlunDevices) Fit(devices []*util.DeviceUsage, request util.Container
 	}
 	return true, tmpDevs, ""
 }
+
+// GetRealTimeDeviceUsage implements the Devices interface for Kunlun XPU devices
+// Currently returns an error as real-time checking is not implemented for Kunlun XPU devices
+func (dev *KunlunDevices) GetRealTimeDeviceUsage(deviceID string) (*util.RealTimeDeviceUsage, error) {
+	return nil, fmt.Errorf("real-time device usage checking is not implemented for Kunlun XPU devices")
+}
+
+// IsRealTimeCheckEnabled implements the Devices interface for Kunlun XPU devices
+// Currently returns false as real-time checking is not implemented for Kunlun XPU devices
+func (dev *KunlunDevices) IsRealTimeCheckEnabled() bool {
+	return false
+}

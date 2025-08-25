@@ -639,3 +639,15 @@ func scoreExclusiveDevices(podDevices util.PodSingleDevice, previous []*util.Dev
 
 	return result
 }
+
+// GetRealTimeDeviceUsage implements the Devices interface for Metax SGPU devices
+// Currently returns an error as real-time checking is not implemented for Metax SGPU devices
+func (dev *MetaxSDevices) GetRealTimeDeviceUsage(deviceID string) (*util.RealTimeDeviceUsage, error) {
+	return nil, fmt.Errorf("real-time device usage checking is not implemented for Metax SGPU devices")
+}
+
+// IsRealTimeCheckEnabled implements the Devices interface for Metax SGPU devices
+// Currently returns false as real-time checking is not implemented for Metax SGPU devices
+func (dev *MetaxSDevices) IsRealTimeCheckEnabled() bool {
+	return false
+}

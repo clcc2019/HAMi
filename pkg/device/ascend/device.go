@@ -383,3 +383,15 @@ func (npu *Devices) Fit(devices []*util.DeviceUsage, request util.ContainerDevic
 	}
 	return false, tmpDevs, common.GenReason(reason, len(devices))
 }
+
+// GetRealTimeDeviceUsage implements the Devices interface for Ascend NPU devices
+// Currently returns an error as real-time checking is not implemented for Ascend NPU devices
+func (dev *Devices) GetRealTimeDeviceUsage(deviceID string) (*util.RealTimeDeviceUsage, error) {
+	return nil, fmt.Errorf("real-time device usage checking is not implemented for Ascend NPU devices")
+}
+
+// IsRealTimeCheckEnabled implements the Devices interface for Ascend NPU devices
+// Currently returns false as real-time checking is not implemented for Ascend NPU devices
+func (dev *Devices) IsRealTimeCheckEnabled() bool {
+	return false
+}

@@ -105,6 +105,9 @@ spec:
             - --gpu-scheduler-policy={{ .Values.scheduler.defaultSchedulerPolicy.gpuSchedulerPolicy }}
             - --force-overwrite-default-scheduler={{ .Values.scheduler.forceOverwriteDefaultScheduler}}
             - --device-config-file=/device-config.yaml
+            {{- if .Values.scheduler.realTimeCheck.enabled }}
+            - --enable-realtime-check=true
+            {{- end }}
             {{- if .Values.devices.ascend.enabled }}
             - --enable-ascend=true
             {{- end }}

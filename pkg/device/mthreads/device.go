@@ -386,3 +386,15 @@ func (mth *MthreadsDevices) Fit(devices []*util.DeviceUsage, request util.Contai
 	}
 	return false, tmpDevs, common.GenReason(reason, len(devices))
 }
+
+// GetRealTimeDeviceUsage implements the Devices interface for Mthreads GPU devices
+// Currently returns an error as real-time checking is not implemented for Mthreads GPU devices
+func (dev *MthreadsDevices) GetRealTimeDeviceUsage(deviceID string) (*util.RealTimeDeviceUsage, error) {
+	return nil, fmt.Errorf("real-time device usage checking is not implemented for Mthreads GPU devices")
+}
+
+// IsRealTimeCheckEnabled implements the Devices interface for Mthreads GPU devices
+// Currently returns false as real-time checking is not implemented for Mthreads GPU devices
+func (dev *MthreadsDevices) IsRealTimeCheckEnabled() bool {
+	return false
+}

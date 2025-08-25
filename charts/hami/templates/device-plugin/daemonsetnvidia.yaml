@@ -76,6 +76,12 @@ spec:
             - name: ENABLE_TOPOLOGY_SCORE
               value: "true"
             {{- end }}
+            {{- if .Values.scheduler.realTimeCheck.enabled }}
+            - name: HAMI_ENABLE_REALTIME_CHECK
+              value: "true"
+            - name: HAMI_REALTIME_CHECK_MODE
+              value: {{ .Values.scheduler.realTimeCheck.mode | default "strict" | quote }}
+            {{- end }}
           securityContext:
             privileged: true
             allowPrivilegeEscalation: true
