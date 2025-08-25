@@ -254,13 +254,13 @@ func (dev *DCUDevices) GenerateResourceRequests(ctr *corev1.Container) util.Cont
 	return util.ContainerDeviceRequest{}
 }
 
-// GetRealTimeDeviceUsage implements the Devices interface for DCU devices
+// GetRealTimeDeviceUsage implements the Devices interface for DCU devices.
 // Currently returns an error as real-time checking is not implemented for DCU devices
 func (dev *DCUDevices) GetRealTimeDeviceUsage(deviceID string) (*util.RealTimeDeviceUsage, error) {
 	return nil, fmt.Errorf("real-time device usage checking is not implemented for DCU devices")
 }
 
-// IsRealTimeCheckEnabled implements the Devices interface for DCU devices
+// IsRealTimeCheckEnabled implements the Devices interface for DCU devices.
 // Currently returns false as real-time checking is not implemented for DCU devices
 func (dev *DCUDevices) IsRealTimeCheckEnabled() bool {
 	return false

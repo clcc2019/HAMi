@@ -459,13 +459,13 @@ func (neuron *AWSNeuronDevices) Fit(devices []*util.DeviceUsage, request util.Co
 	return false, tmpDevs, common.GenReason(reason, len(devices))
 }
 
-// GetRealTimeDeviceUsage implements the Devices interface for AWS Neuron devices
+// GetRealTimeDeviceUsage implements the Devices interface for AWS Neuron devices.
 // Currently returns an error as real-time checking is not implemented for AWS Neuron devices
 func (dev *AWSNeuronDevices) GetRealTimeDeviceUsage(deviceID string) (*util.RealTimeDeviceUsage, error) {
 	return nil, fmt.Errorf("real-time device usage checking is not implemented for AWS Neuron devices")
 }
 
-// IsRealTimeCheckEnabled implements the Devices interface for AWS Neuron devices
+// IsRealTimeCheckEnabled implements the Devices interface for AWS Neuron devices.
 // Currently returns false as real-time checking is not implemented for AWS Neuron devices
 func (dev *AWSNeuronDevices) IsRealTimeCheckEnabled() bool {
 	return false

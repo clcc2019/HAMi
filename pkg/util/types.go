@@ -179,7 +179,7 @@ const (
 	RealTimeCheckAnnotationKey = "hami.io/enable-realtime-check"
 )
 
-// RealTimeDeviceUsage represents the real-time usage status of a GPU device
+// RealTimeDeviceUsage represents the real-time usage status of a GPU device.
 type RealTimeDeviceUsage struct {
 	DeviceID     string `json:"deviceid"`
 	UsedMemory   int64  `json:"usedmemory"`   // Used memory in bytes

@@ -868,7 +868,7 @@ func computeBestCombination(nodeInfo *util.NodeInfo, combinations []util.Contain
 	return bestCombination
 }
 
-// InitNVML initializes NVML library for real-time GPU status checking
+// InitNVML initializes NVML library for real-time GPU status checking.
 func (dev *NvidiaGPUDevices) InitNVML() error {
 	dev.nvmlMutex.Lock()
 	defer dev.nvmlMutex.Unlock()
@@ -886,7 +886,7 @@ func (dev *NvidiaGPUDevices) InitNVML() error {
 	return nil
 }
 
-// GetRealTimeDeviceUsage implements the Devices interface for real-time GPU status checking
+// GetRealTimeDeviceUsage implements the Devices interface for real-time GPU status checking.
 func (dev *NvidiaGPUDevices) GetRealTimeDeviceUsage(deviceID string) (*util.RealTimeDeviceUsage, error) {
 	if !dev.enableRealTimeCheck {
 		return nil, fmt.Errorf("real-time check is disabled")
@@ -943,7 +943,7 @@ func (dev *NvidiaGPUDevices) GetRealTimeDeviceUsage(deviceID string) (*util.Real
 	return realTimeUsage, nil
 }
 
-// IsRealTimeCheckEnabled implements the Devices interface
+// IsRealTimeCheckEnabled implements the Devices interface.
 func (dev *NvidiaGPUDevices) IsRealTimeCheckEnabled() bool {
 	return dev.enableRealTimeCheck
 }
