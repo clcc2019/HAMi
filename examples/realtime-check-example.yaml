@@ -1,0 +1,221 @@
+# Example configurations for HAMi real-time GPU status check
+
+---
+# Example 1: Pod with real-time checking enabled
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpu-workload-with-realtime-check
+  annotations:
+    # Enable real-time GPU status checking for this pod
+    hami.io/enable-realtime-check: "true"
+spec:
+  schedulerName: hami-scheduler
+  containers:
+  - name: cuda-container
+    image: nvidia/cuda:11.8-devel-ubuntu20.04
+    command: ["nvidia-smi", "-l", "60"]
+    resources:
+      limits:
+        nvidia.com/gpu: 1
+        nvidia.com/gpumem: 4096  # Request 4GB GPU memory
+        nvidia.com/gpucores: 50  # Request 50% GPU cores
+
+---
+# Example 2: Pod with real-time checking disabled (uses cached data)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpu-workload-cached-only
+  annotations:
+    # Disable real-time checking, use cached data only
+    hami.io/enable-realtime-check: "false"
+spec:
+  schedulerName: hami-scheduler
+  containers:
+  - name: pytorch-container
+    image: pytorch/pytorch:1.12.1-cuda11.3-cudnn8-devel
+    command: ["python", "-c", "import torch; print(torch.cuda.is_available())"]
+    resources:
+      limits:
+        nvidia.com/gpu: 1
+        nvidia.com/gpumem-percentage: 25  # Request 25% of GPU memory
+
+---
+# Example 3: Multi-container pod with different GPU requirements
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-container-gpu-pod
+  annotations:
+    hami.io/enable-realtime-check: "true"
+    # Use binpack scheduling policy for better resource utilization
+    hami.io/gpu-scheduler-policy: "binpack"
+spec:
+  schedulerName: hami-scheduler
+  containers:
+  - name: training-container
+    image: tensorflow/tensorflow:2.8.0-gpu
+    resources:
+      limits:
+        nvidia.com/gpu: 1
+        nvidia.com/gpumem: 6144  # 6GB for training
+        nvidia.com/gpucores: 80  # 80% GPU utilization
+  - name: inference-container
+    image: nvidia/tritonserver:22.03-py3
+    resources:
+      limits:
+        nvidia.com/gpu: 1
+        nvidia.com/gpumem: 2048  # 2GB for inference
+        nvidia.com/gpucores: 20  # 20% GPU utilization
+
+---
+# Example 4: Deployment with real-time checking
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-inference-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: gpu-inference
+  template:
+    metadata:
+      labels:
+        app: gpu-inference
+      annotations:
+        hami.io/enable-realtime-check: "true"
+    spec:
+      schedulerName: hami-scheduler
+      containers:
+      - name: inference-server
+        image: nvcr.io/nvidia/pytorch:22.03-py3
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+            nvidia.com/gpumem: 2048
+            nvidia.com/gpucores: 30
+          requests:
+            nvidia.com/gpu: 1
+            nvidia.com/gpumem: 2048
+            nvidia.com/gpucores: 30
+
+---
+# Example 5: Job with exclusive GPU access and real-time checking
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gpu-training-job
+spec:
+  template:
+    metadata:
+      annotations:
+        hami.io/enable-realtime-check: "true"
+        # Request specific GPU type
+        nvidia.com/use-gputype: "A100"
+    spec:
+      schedulerName: hami-scheduler
+      restartPolicy: Never
+      containers:
+      - name: training-container
+        image: nvcr.io/nvidia/pytorch:22.03-py3
+        command: ["python", "train.py"]
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+            nvidia.com/gpucores: 100  # Exclusive access (100% cores)
+        env:
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+
+---
+# Example 6: ConfigMap for HAMi scheduler with real-time checking
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hami-scheduler-config
+  namespace: hami-system
+data:
+  config.yaml: |
+    # HAMi Scheduler Configuration
+    schedulerName: "hami-scheduler"
+    
+    # Enable real-time GPU status checking globally
+    enableRealTimeCheck: true
+    
+    # Default resource allocation
+    defaultMem: 1024
+    defaultCores: 10
+    defaultGPU: 1
+    
+    # Scheduling policies
+    nodeSchedulerPolicy: "binpack"
+    gpuSchedulerPolicy: "spread"
+    
+    # Node selection
+    nodeLabelSelector:
+      gpu-type: "nvidia"
+    
+    # Timeouts
+    nodeLockTimeout: "5m"
+
+---
+# Example 7: DaemonSet configuration for device plugin with real-time checking
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: hami-device-plugin
+  namespace: hami-system
+spec:
+  selector:
+    matchLabels:
+      name: hami-device-plugin
+  template:
+    metadata:
+      labels:
+        name: hami-device-plugin
+    spec:
+      containers:
+      - name: device-plugin
+        image: projecthami/hami:latest
+        env:
+        # Enable real-time checking for NVIDIA devices
+        - name: HAMI_ENABLE_REALTIME_CHECK
+          value: "true"
+        # Set real-time check mode (strict|warning|disabled)
+        - name: HAMI_REALTIME_CHECK_MODE
+          value: "warning"
+        # Node name for device registration
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: device-plugin
+          mountPath: /var/lib/kubelet/device-plugins
+        - name: dev
+          mountPath: /dev
+        - name: nvidia-ml
+          mountPath: /usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1
+          readOnly: true
+      volumes:
+      - name: device-plugin
+        hostPath:
+          path: /var/lib/kubelet/device-plugins
+      - name: dev
+        hostPath:
+          path: /dev
+      - name: nvidia-ml
+        hostPath:
+          path: /usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1
+      nodeSelector:
+        accelerator: nvidia-tesla-k80
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
