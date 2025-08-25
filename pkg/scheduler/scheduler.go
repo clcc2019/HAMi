@@ -528,7 +528,7 @@ func genSuccessMsg(totalNodes int, target string, nodes []*policy.NodeScore) str
 	return fmt.Sprintf(successMsg, target, totalNodes-len(nodes), len(nodes), score)
 }
 
-// shouldUseRealTimeCheck determines if real-time GPU status check should be used for the given pod
+// shouldUseRealTimeCheck determines if real-time GPU status check should be used for the given pod.
 func (s *Scheduler) shouldUseRealTimeCheck(pod *corev1.Pod) bool {
 	// Check pod annotation first
 	if pod != nil && pod.Annotations != nil {
