@@ -32,7 +32,7 @@ For NVIDIA device plugin, set the following environment variables:
 HAMI_ENABLE_REALTIME_CHECK=true
 
 # Set real-time check mode (strict|warning|disabled)
-HAMI_REALTIME_CHECK_MODE=warning
+HAMI_REALTIME_CHECK_MODE=strict
 ```
 
 ### Per-Pod Configuration
@@ -59,13 +59,13 @@ spec:
 
 ## Check Modes
 
-### Strict Mode (`HAMI_REALTIME_CHECK_MODE=strict`)
+### Strict Mode (`HAMI_REALTIME_CHECK_MODE=strict`) - Default
 
 - **Behavior**: Reject scheduling if real-time memory check fails
 - **Use Case**: Production environments where strict memory isolation is required
 - **Risk**: May reject valid scheduling requests due to temporary memory spikes
 
-### Warning Mode (`HAMI_REALTIME_CHECK_MODE=warning`) - Default
+### Warning Mode (`HAMI_REALTIME_CHECK_MODE=warning`)
 
 - **Behavior**: Log warnings but allow scheduling to proceed
 - **Use Case**: Most production environments, provides visibility without blocking

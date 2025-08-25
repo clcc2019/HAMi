@@ -225,3 +225,55 @@ This document provides detailed descriptions of all configurable values paramete
 | `devices.ascend.nodeSelector` | Node selector | `{"ascend": "on"}` |
 | `devices.ascend.tolerations` | Tolerations | `[]` |
 | `devices.ascend.customresources` | Custom resources | `["huawei.com/Ascend910A", "huawei.com/Ascend910A-memory", ...]` |
+
+## Real-time GPU Status Check Configuration
+
+HAMi supports real-time GPU status checking to prevent scheduling conflicts when non-HAMi managed pods occupy GPU memory.
+
+### Configuration Parameters
+
+| Parameter | Description | Default Value |
+|-----------|-------------|---------------|
+| `scheduler.realTimeCheck.enabled` | Enable real-time GPU status checking during scheduling | `false` |
+| `scheduler.realTimeCheck.mode` | Real-time check mode: `strict`, `warning`, `disabled` | `"strict"` |
+
+### Real-time Check Modes
+
+- **`strict`**: Reject scheduling if real-time check fails (recommended for production)
+- **`warning`**: Log warnings but allow scheduling to proceed (for testing)
+- **`disabled`**: Skip real-time memory validation (fallback mode)
+
+### Example Configuration
+
+```yaml
+scheduler:
+  realTimeCheck:
+    enabled: true
+    mode: "strict"
+```
+
+### Environment Variables (Device Plugin)
+
+When real-time checking is enabled, the following environment variables are automatically set:
+
+- `HAMI_ENABLE_REALTIME_CHECK=true`
+- `HAMI_REALTIME_CHECK_MODE=strict`
+
+### Per-Pod Control
+
+You can also control real-time checking per pod using annotations:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    hami.io/enable-realtime-check: "true"
+spec:
+  containers:
+  - name: gpu-container
+    resources:
+      limits:
+        nvidia.com/gpu: 1
+        nvidia.com/gpumem: 4096
+```

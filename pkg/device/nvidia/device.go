@@ -706,8 +706,8 @@ func (nv *NvidiaGPUDevices) Fit(devices []*util.DeviceUsage, request util.Contai
 			if err != nil {
 				klog.Warningf("Failed to get real-time usage for device %s: %v, continuing with cached data", dev.ID, err)
 			} else {
-				// Validate real-time memory usage
-				if err := nv.validateRealTimeMemory(dev, k, realTimeUsage, pod); err != nil {
+				// Validate real-time resource usage (memory + cores)
+				if err := nv.validateRealTimeResources(dev, k, realTimeUsage, pod); err != nil {
 					reason[common.RealTimeMemoryInsufficient]++
 					klog.V(4).InfoS("Real-time memory check failed",
 						"pod", klog.KObj(pod),
@@ -948,8 +948,8 @@ func (dev *NvidiaGPUDevices) IsRealTimeCheckEnabled() bool {
 	return dev.enableRealTimeCheck
 }
 
-// validateRealTimeMemory validates if the device has enough memory based on real-time usage
-func (dev *NvidiaGPUDevices) validateRealTimeMemory(deviceUsage *util.DeviceUsage, request util.ContainerDeviceRequest, realTimeUsage *util.RealTimeDeviceUsage, pod *corev1.Pod) error {
+// validateRealTimeResources validates if the device has enough memory and cores based on real-time usage
+func (dev *NvidiaGPUDevices) validateRealTimeResources(deviceUsage *util.DeviceUsage, request util.ContainerDeviceRequest, realTimeUsage *util.RealTimeDeviceUsage, pod *corev1.Pod) error {
 	requestedMemBytes := int64(0)
 
 	// Calculate requested memory in bytes
@@ -970,34 +970,59 @@ func (dev *NvidiaGPUDevices) validateRealTimeMemory(deviceUsage *util.DeviceUsag
 	safetyMarginBytes := int64(100 * 1024 * 1024) // 100MB safety margin
 	availableMemory := realTimeUsage.TotalMemory - realTimeUsage.UsedMemory - safetyMarginBytes
 
-	if requestedMemBytes > availableMemory {
+	// Validate memory requirement
+	memoryInsufficient := requestedMemBytes > availableMemory
+
+	// Validate cores requirement (算力检查)
+	// Note: NVML utilization is instantaneous, but we use it as an indicator
+	// For VGPU, we still rely on HAMi's core allocation tracking
+	coresInsufficient := false
+	if request.Coresreq > 0 {
+		// Check if requesting exclusive access (100% cores) but GPU is already in use
+		if request.Coresreq == 100 && realTimeUsage.ProcessCount > 0 {
+			coresInsufficient = true
+		}
+		// For shared GPU scenarios, we still rely on HAMi's cached core tracking
+		// because NVML utilization is instantaneous and doesn't reflect allocated cores
+		availableCores := deviceUsage.Totalcore - deviceUsage.Usedcores
+		if availableCores < request.Coresreq {
+			coresInsufficient = true
+		}
+	}
+
+	if memoryInsufficient || coresInsufficient {
 		// Check real-time check mode
 		mode := os.Getenv("HAMI_REALTIME_CHECK_MODE")
 		if mode == "" {
-			mode = "warning" // Default mode
+			mode = "strict" // Default mode changed to strict
 		}
+
+		// Generate detailed error message
+		var reasons []string
+		if memoryInsufficient {
+			reasons = append(reasons, fmt.Sprintf("memory: requested %d MB, available %d MB",
+				requestedMemBytes/(1024*1024), availableMemory/(1024*1024)))
+		}
+		if coresInsufficient {
+			availableCores := deviceUsage.Totalcore - deviceUsage.Usedcores
+			reasons = append(reasons, fmt.Sprintf("cores: requested %d%%, available %d%%",
+				request.Coresreq, availableCores))
+		}
+		reasonStr := strings.Join(reasons, "; ")
 
 		switch mode {
 		case "strict":
-			return fmt.Errorf("insufficient real-time GPU memory (strict mode): requested %d MB, available %d MB (used: %d MB, total: %d MB)",
-				requestedMemBytes/(1024*1024),
-				availableMemory/(1024*1024),
-				realTimeUsage.UsedMemory/(1024*1024),
-				realTimeUsage.TotalMemory/(1024*1024))
+			return fmt.Errorf("insufficient real-time GPU resources (strict mode): %s (processes: %d, utilization: %d%%)",
+				reasonStr, realTimeUsage.ProcessCount, realTimeUsage.Utilization)
 		case "warning":
-			klog.Warningf("Real-time GPU memory check failed for pod %s, but allowing due to warning mode: requested %d MB, available %d MB",
-				klog.KObj(pod),
-				requestedMemBytes/(1024*1024),
-				availableMemory/(1024*1024))
+			klog.Warningf("Real-time GPU resource check failed for pod %s, but allowing due to warning mode: %s",
+				klog.KObj(pod), reasonStr)
 			return nil
 		case "disabled":
 			return nil
 		default:
-			return fmt.Errorf("insufficient real-time GPU memory: requested %d MB, available %d MB (used: %d MB, total: %d MB)",
-				requestedMemBytes/(1024*1024),
-				availableMemory/(1024*1024),
-				realTimeUsage.UsedMemory/(1024*1024),
-				realTimeUsage.TotalMemory/(1024*1024))
+			return fmt.Errorf("insufficient real-time GPU resources: %s (processes: %d, utilization: %d%%)",
+				reasonStr, realTimeUsage.ProcessCount, realTimeUsage.Utilization)
 		}
 	}
 
