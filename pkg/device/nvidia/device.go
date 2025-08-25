@@ -20,10 +20,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
+	"github.com/NVIDIA/go-nvml/pkg/nvml"
 	spec "github.com/NVIDIA/k8s-device-plugin/api/config/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -155,7 +159,10 @@ type DeviceConfig struct {
 }
 
 type NvidiaGPUDevices struct {
-	config NvidiaConfig
+	config              NvidiaConfig
+	enableRealTimeCheck bool
+	nvmlInitialized     bool
+	nvmlMutex           sync.Mutex
 }
 
 func InitNvidiaDevice(nvconfig NvidiaConfig) *NvidiaGPUDevices {
@@ -163,8 +170,18 @@ func InitNvidiaDevice(nvconfig NvidiaConfig) *NvidiaGPUDevices {
 	util.InRequestDevices[NvidiaGPUDevice] = "hami.io/vgpu-devices-to-allocate"
 	util.SupportDevices[NvidiaGPUDevice] = "hami.io/vgpu-devices-allocated"
 	util.HandshakeAnnos[NvidiaGPUDevice] = HandshakeAnnos
+
+	// Initialize real-time check configuration
+	enableRealTimeCheck := false
+	if os.Getenv("HAMI_ENABLE_REALTIME_CHECK") == "true" {
+		enableRealTimeCheck = true
+		klog.InfoS("Real-time GPU status check enabled")
+	}
+
 	return &NvidiaGPUDevices{
-		config: nvconfig,
+		config:              nvconfig,
+		enableRealTimeCheck: enableRealTimeCheck,
+		nvmlInitialized:     false,
 	}
 }
 
@@ -683,6 +700,36 @@ func (nv *NvidiaGPUDevices) Fit(devices []*util.DeviceUsage, request util.Contai
 			continue
 		}
 
+		// Real-time GPU status check
+		if nv.shouldUseRealTimeCheck(pod) {
+			realTimeUsage, err := nv.GetRealTimeDeviceUsage(dev.ID)
+			if err != nil {
+				klog.Warningf("Failed to get real-time usage for device %s: %v, continuing with cached data", dev.ID, err)
+			} else {
+				// Validate real-time memory usage
+				if err := nv.validateRealTimeMemory(dev, k, realTimeUsage, pod); err != nil {
+					reason[common.RealTimeMemoryInsufficient]++
+					klog.V(4).InfoS("Real-time memory check failed",
+						"pod", klog.KObj(pod),
+						"device", dev.ID,
+						"requestedMem", memreq,
+						"realUsedMem", realTimeUsage.UsedMemory/(1024*1024),
+						"totalMem", realTimeUsage.TotalMemory/(1024*1024),
+						"error", err)
+					continue
+				}
+
+				// Log real-time status for debugging
+				klog.V(4).InfoS("Real-time GPU status check passed",
+					"pod", klog.KObj(pod),
+					"device", dev.ID,
+					"realUsedMemMB", realTimeUsage.UsedMemory/(1024*1024),
+					"cachedUsedMemMB", dev.Usedmem,
+					"utilization", realTimeUsage.Utilization,
+					"processCount", realTimeUsage.ProcessCount)
+			}
+		}
+
 		if k.Nums > 0 {
 			klog.V(5).InfoS("find fit device", "pod", klog.KObj(pod), "device", dev.ID)
 			if !needTopology {
@@ -819,4 +866,153 @@ func computeBestCombination(nodeInfo *util.NodeInfo, combinations []util.Contain
 		}
 	}
 	return bestCombination
+}
+
+// InitNVML initializes NVML library for real-time GPU status checking
+func (dev *NvidiaGPUDevices) InitNVML() error {
+	dev.nvmlMutex.Lock()
+	defer dev.nvmlMutex.Unlock()
+
+	if dev.nvmlInitialized {
+		return nil
+	}
+
+	ret := nvml.Init()
+	if ret != nvml.SUCCESS {
+		return fmt.Errorf("failed to initialize NVML: %v", nvml.ErrorString(ret))
+	}
+	dev.nvmlInitialized = true
+	klog.V(4).InfoS("NVML initialized successfully for real-time checking")
+	return nil
+}
+
+// GetRealTimeDeviceUsage implements the Devices interface for real-time GPU status checking
+func (dev *NvidiaGPUDevices) GetRealTimeDeviceUsage(deviceID string) (*util.RealTimeDeviceUsage, error) {
+	if !dev.enableRealTimeCheck {
+		return nil, fmt.Errorf("real-time check is disabled")
+	}
+
+	if err := dev.InitNVML(); err != nil {
+		return nil, fmt.Errorf("failed to initialize NVML: %v", err)
+	}
+
+	// Get device handle by UUID
+	device, ret := nvml.DeviceGetHandleByUUID(deviceID)
+	if ret != nvml.SUCCESS {
+		return nil, fmt.Errorf("failed to get device handle for UUID %s: %v", deviceID, nvml.ErrorString(ret))
+	}
+
+	// Get memory information
+	memInfo, ret := device.GetMemoryInfo()
+	if ret != nvml.SUCCESS {
+		return nil, fmt.Errorf("failed to get memory info for device %s: %v", deviceID, nvml.ErrorString(ret))
+	}
+
+	// Get utilization rates
+	utilRates, ret := device.GetUtilizationRates()
+	if ret != nvml.SUCCESS {
+		klog.V(4).InfoS("Failed to get utilization rates, using default", "device", deviceID, "error", nvml.ErrorString(ret))
+		utilRates.Gpu = 0 // Set default value
+	}
+
+	// Get running processes count
+	processes, ret := device.GetComputeRunningProcesses()
+	processCount := int32(0)
+	if ret == nvml.SUCCESS {
+		processCount = int32(len(processes))
+	} else {
+		klog.V(4).InfoS("Failed to get running processes, using default", "device", deviceID, "error", nvml.ErrorString(ret))
+	}
+
+	realTimeUsage := &util.RealTimeDeviceUsage{
+		DeviceID:     deviceID,
+		UsedMemory:   int64(memInfo.Used),
+		TotalMemory:  int64(memInfo.Total),
+		Utilization:  int32(utilRates.Gpu),
+		ProcessCount: processCount,
+		Timestamp:    time.Now().Unix(),
+	}
+
+	klog.V(5).InfoS("Retrieved real-time GPU usage",
+		"deviceID", deviceID,
+		"usedMemoryMB", memInfo.Used/(1024*1024),
+		"totalMemoryMB", memInfo.Total/(1024*1024),
+		"utilization", utilRates.Gpu,
+		"processCount", processCount)
+
+	return realTimeUsage, nil
+}
+
+// IsRealTimeCheckEnabled implements the Devices interface
+func (dev *NvidiaGPUDevices) IsRealTimeCheckEnabled() bool {
+	return dev.enableRealTimeCheck
+}
+
+// validateRealTimeMemory validates if the device has enough memory based on real-time usage
+func (dev *NvidiaGPUDevices) validateRealTimeMemory(deviceUsage *util.DeviceUsage, request util.ContainerDeviceRequest, realTimeUsage *util.RealTimeDeviceUsage, pod *corev1.Pod) error {
+	requestedMemBytes := int64(0)
+
+	// Calculate requested memory in bytes
+	if request.MemPercentagereq > 0 && request.MemPercentagereq <= 100 {
+		requestedMemBytes = realTimeUsage.TotalMemory * int64(request.MemPercentagereq) / 100
+	} else if request.Memreq > 0 {
+		requestedMemBytes = int64(request.Memreq) * 1024 * 1024 // Convert MB to bytes
+	} else {
+		// Use default memory
+		if dev.config.DefaultMemory > 0 {
+			requestedMemBytes = int64(dev.config.DefaultMemory) * 1024 * 1024
+		} else {
+			requestedMemBytes = realTimeUsage.TotalMemory // Default to use all memory
+		}
+	}
+
+	// Calculate available memory with safety margin
+	safetyMarginBytes := int64(100 * 1024 * 1024) // 100MB safety margin
+	availableMemory := realTimeUsage.TotalMemory - realTimeUsage.UsedMemory - safetyMarginBytes
+
+	if requestedMemBytes > availableMemory {
+		// Check real-time check mode
+		mode := os.Getenv("HAMI_REALTIME_CHECK_MODE")
+		if mode == "" {
+			mode = "warning" // Default mode
+		}
+
+		switch mode {
+		case "strict":
+			return fmt.Errorf("insufficient real-time GPU memory (strict mode): requested %d MB, available %d MB (used: %d MB, total: %d MB)",
+				requestedMemBytes/(1024*1024),
+				availableMemory/(1024*1024),
+				realTimeUsage.UsedMemory/(1024*1024),
+				realTimeUsage.TotalMemory/(1024*1024))
+		case "warning":
+			klog.Warningf("Real-time GPU memory check failed for pod %s, but allowing due to warning mode: requested %d MB, available %d MB",
+				klog.KObj(pod),
+				requestedMemBytes/(1024*1024),
+				availableMemory/(1024*1024))
+			return nil
+		case "disabled":
+			return nil
+		default:
+			return fmt.Errorf("insufficient real-time GPU memory: requested %d MB, available %d MB (used: %d MB, total: %d MB)",
+				requestedMemBytes/(1024*1024),
+				availableMemory/(1024*1024),
+				realTimeUsage.UsedMemory/(1024*1024),
+				realTimeUsage.TotalMemory/(1024*1024))
+		}
+	}
+
+	return nil
+}
+
+// shouldUseRealTimeCheck determines if real-time GPU status check should be used for the given pod
+func (dev *NvidiaGPUDevices) shouldUseRealTimeCheck(pod *corev1.Pod) bool {
+	// Check pod annotation first
+	if pod != nil && pod.Annotations != nil {
+		if value, ok := pod.Annotations[util.RealTimeCheckAnnotationKey]; ok {
+			return value == "true"
+		}
+	}
+
+	// Check global configuration
+	return dev.enableRealTimeCheck
 }

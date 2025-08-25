@@ -121,6 +121,10 @@ type DeviceUsage struct {
 	Type        string
 	Health      bool
 	CustomInfo  map[string]any
+	// Real-time status fields
+	RealTimeUsedmem     int32 `json:"realtimeusedmem,omitempty"`
+	RealTimeUtilization int32 `json:"realtimeutilization,omitempty"`
+	LastRealTimeUpdate  int64 `json:"lastrealtimeupdate,omitempty"`
 }
 
 type DeviceInfo struct {
@@ -171,7 +175,19 @@ const (
 	NodeSchedulerPolicyAnnotationKey = "hami.io/node-scheduler-policy"
 	// GPUSchedulerPolicyAnnotationKey is user set Pod annotation to change this default GPU policy.
 	GPUSchedulerPolicyAnnotationKey = "hami.io/gpu-scheduler-policy"
+	// RealTimeCheckAnnotationKey is user set Pod annotation to enable real-time GPU status check.
+	RealTimeCheckAnnotationKey = "hami.io/enable-realtime-check"
 )
+
+// RealTimeDeviceUsage represents the real-time usage status of a GPU device
+type RealTimeDeviceUsage struct {
+	DeviceID     string `json:"deviceid"`
+	UsedMemory   int64  `json:"usedmemory"`   // Used memory in bytes
+	TotalMemory  int64  `json:"totalmemory"`  // Total memory in bytes
+	Utilization  int32  `json:"utilization"`  // GPU utilization percentage (0-100)
+	ProcessCount int32  `json:"processcount"` // Number of running processes
+	Timestamp    int64  `json:"timestamp"`    // Unix timestamp when data was collected
+}
 
 func (s SchedulerPolicyName) String() string {
 	return string(s)

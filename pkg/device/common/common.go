@@ -35,6 +35,8 @@ const (
 	AllocatedCardsInsufficientRequest = "AllocatedCardsInsufficientRequest"
 	NodeUnfitPod                      = "NodeUnfitPod"
 	NodeFitPod                        = "NodeFitPod"
+	RealTimeMemoryInsufficient        = "RealTimeMemoryInsufficient"
+	RealTimeCheckFailed               = "RealTimeCheckFailed"
 )
 
 func GenReason(reasons map[string]int, cards int) string {
